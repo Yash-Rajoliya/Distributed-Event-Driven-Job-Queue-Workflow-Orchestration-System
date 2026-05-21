@@ -1,0 +1,215 @@
+openapi: 3.0.3
+
+info:
+  title: Distributed Job Queue API
+  version: 1.0.0
+  description: |
+    Enterprise-grade asynchronous distributed job queue platform API.
+
+servers:
+  - url: https://api.djqueue.io/v1
+
+tags:
+  - name: Jobs
+  - name: Scheduler
+  - name: Retry
+  - name: DLQ
+  - name: Workflow
+  - name: Health
+
+paths:
+
+  /jobs:
+    post:
+      tags: [Jobs]
+      summary: Submit a new async job
+      operationId: submitJob
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobRequest'
+
+      responses:
+        '202':
+          description: Job accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobAcceptedResponse'
+
+  /jobs/{jobId}:
+    get:
+      tags: [Jobs]
+      summary: Get job status
+
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema:
+            type: string
+
+      responses:
+        '200':
+          description: Job status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobStatusResponse'
+
+  /jobs/{jobId}/cancel:
+    post:
+      tags: [Jobs]
+      summary: Cancel pending job
+
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema:
+            type: string
+
+      responses:
+        '200':
+          description: Cancelled
+
+  /retry/{jobId}:
+    post:
+      tags: [Retry]
+      summary: Trigger manual retry
+
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema:
+            type: string
+
+      responses:
+        '202':
+          description: Retry scheduled
+
+  /dlq/replay/{jobId}:
+    post:
+      tags: [DLQ]
+      summary: Replay dead-lettered job
+
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema:
+            type: string
+
+      responses:
+        '202':
+          description: Replay accepted
+
+  /scheduler/jobs:
+    post:
+      tags: [Scheduler]
+      summary: Schedule recurring job
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScheduledJobRequest'
+
+      responses:
+        '201':
+          description: Scheduled
+
+  /workflow/start:
+    post:
+      tags: [Workflow]
+      summary: Start saga workflow
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkflowRequest'
+
+      responses:
+        '202':
+          description: Workflow started
+
+  /health:
+    get:
+      tags: [Health]
+      summary: System health
+
+      responses:
+        '200':
+          description: Healthy
+
+components:
+
+  schemas:
+
+    JobRequest:
+      type: object
+      required:
+        - tenantId
+        - jobType
+        - payload
+
+      properties:
+        tenantId:
+          type: string
+
+        jobType:
+          type: string
+
+        priority:
+          type: integer
+          default: 5
+
+        payload:
+          type: object
+
+    JobAcceptedResponse:
+      type: object
+      properties:
+        jobId:
+          type: string
+        status:
+          type: string
+          example: ACCEPTED
+
+    JobStatusResponse:
+      type: object
+      properties:
+        jobId:
+          type: string
+        status:
+          type: string
+        retries:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+
+    ScheduledJobRequest:
+      type: object
+      properties:
+        cron:
+          type: string
+        job:
+          $ref: '#/components/schemas/JobRequest'
+
+    WorkflowRequest:
+      type: object
+      properties:
+        workflowType:
+          type: string
+        steps:
+          type: array
+          items:
+            type: string
