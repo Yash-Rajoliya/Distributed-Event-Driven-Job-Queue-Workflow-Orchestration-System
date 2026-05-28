@@ -1,43 +1,113 @@
 package com.djqueue.apigateway.filters;
 
 import com.djqueue.common.security.JwtUtil;
-import org.springframework.cloud.gateway.filter.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.cloud.gateway.filter.GatewayFilterChain;
+import org.springframework.cloud.gateway.filter.GlobalFilter;
+import org.springframework.core.Ordered;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
 @Component
-public class AuthenticationFilter implements GlobalFilter {
+public class AuthenticationFilter
+        implements GlobalFilter, Ordered {
+
+    private static final Logger log =
+            LoggerFactory.getLogger(AuthenticationFilter.class);
+
+    private static final String USER_ID_HEADER = "X-USER-ID";
 
     @Override
-    public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+    public Mono<Void> filter(
+            ServerWebExchange exchange,
+            GatewayFilterChain chain
+    ) {
 
-        String auth = exchange.getRequest()
+        /*
+         * Prevent duplicate filter execution
+         * during reactive chain re-processing.
+         */
+        if (Boolean.TRUE.equals(
+                exchange.getAttribute("auth_filter_applied"))
+        ) {
+            return chain.filter(exchange);
+        }
+
+        exchange.getAttributes()
+                .put("auth_filter_applied", true);
+
+        String authHeader = exchange.getRequest()
                 .getHeaders()
-                .getFirst("Authorization");
+                .getFirst(HttpHeaders.AUTHORIZATION);
 
-        if (auth == null || !auth.startsWith("Bearer ")) {
+        if (authHeader == null ||
+                !authHeader.startsWith("Bearer ")) {
+
             return unauthorized(exchange);
         }
 
         try {
-            String token = auth.substring(7);
-            String user = JwtUtil.validate(token);
 
-            exchange.getRequest().mutate()
-                    .header("X-USER-ID", user)
-                    .build();
+            String token = authHeader.substring(7);
 
-        } catch (Exception e) {
+            String userId = JwtUtil.validate(token);
+
+            /*
+             * Proper immutable request mutation
+             * for reactive gateway chains.
+             */
+            ServerHttpRequest mutatedRequest =
+                    exchange.getRequest()
+                            .mutate()
+                            .header(USER_ID_HEADER, userId)
+                            .build();
+
+            ServerWebExchange mutatedExchange =
+                    exchange.mutate()
+                            .request(mutatedRequest)
+                            .build();
+
+            /*
+             * Store auth metadata once
+             * to avoid duplicate downstream logging.
+             */
+            mutatedExchange.getAttributes()
+                    .put("authenticatedUser", userId);
+
+            return chain.filter(mutatedExchange);
+
+        } catch (Exception ex) {
+
+            log.debug(
+                    "JWT validation failed: {}",
+                    ex.getMessage()
+            );
+
             return unauthorized(exchange);
         }
-
-        return chain.filter(exchange);
     }
 
-    private Mono<Void> unauthorized(ServerWebExchange exchange) {
-        exchange.getResponse().setStatusCode(
-                org.springframework.http.HttpStatus.UNAUTHORIZED);
+    private Mono<Void> unauthorized(
+            ServerWebExchange exchange
+    ) {
+
+        exchange.getResponse()
+                .setStatusCode(HttpStatus.UNAUTHORIZED);
+
         return exchange.getResponse().setComplete();
+    }
+
+    /**
+     * Execute before logging filters
+     * to prevent duplicate request logging.
+     */
+    @Override
+    public int getOrder() {
+        return -100;
     }
 }
