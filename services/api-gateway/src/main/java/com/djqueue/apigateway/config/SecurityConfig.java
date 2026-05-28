@@ -6,6 +6,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
 import org.springframework.security.web.server.SecurityWebFilterChain;
+import org.springframework.security.web.server.context.NoOpServerSecurityContextRepository;
 
 @Configuration
 @EnableWebFluxSecurity
@@ -19,7 +20,7 @@ public class SecurityConfig {
         return http
 
                 /*
-                 * API gateway is stateless.
+                 * Stateless gateway architecture.
                  */
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
 
@@ -30,19 +31,16 @@ public class SecurityConfig {
                 .logout(ServerHttpSecurity.LogoutSpec::disable)
 
                 /*
-                 * Prevent security context persistence
-                 * across reactive chains.
+                 * Avoid duplicate reactive security persistence.
                  */
                 .securityContextRepository(
-                        org.springframework.security.web.server.context
-                                .NoOpServerSecurityContextRepository
-                                .getInstance()
+                        NoOpServerSecurityContextRepository.getInstance()
                 )
 
-                .authorizeExchange(exchanges -> exchanges
+                .authorizeExchange(exchange -> exchange
 
                         /*
-                         * Public endpoints
+                         * Public endpoints.
                          */
                         .pathMatchers(
                                 "/health",
@@ -51,13 +49,13 @@ public class SecurityConfig {
                         ).permitAll()
 
                         /*
-                         * Preflight CORS requests
+                         * Allow CORS preflight.
                          */
                         .pathMatchers(HttpMethod.OPTIONS)
                         .permitAll()
 
                         /*
-                         * All other routes require auth
+                         * Everything else authenticated.
                          */
                         .anyExchange()
                         .authenticated()
