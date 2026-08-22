@@ -9,9 +9,11 @@ import com.djqueue.producer.domain.repository.JobRepository;
 import com.djqueue.producer.infrastructure.kafka.JobProducer;
 import com.djqueue.producer.mapper.JobMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class JobService {
@@ -41,7 +43,18 @@ public class JobService {
                 .createdAt(TimeUtil.now())
                 .build();
 
-        kafkaProducer.publish(KafkaTopics.JOB_TOPIC, jobId, event);
+        kafkaProducer.publish(KafkaTopics.JOB_TOPIC, jobId, event)
+                .whenComplete((result, ex) -> {
+                    if (ex != null) {
+                        log.error("Failed to publish event for jobId: {}", jobId, ex);
+                        job.setStatus("FAILED");
+                        repository.save(job);
+                    } else {
+                        log.info("Successfully published event for jobId: {}", jobId);
+                        job.setStatus("PUBLISHED");
+                        repository.save(job);
+                    }
+                });
 
         return jobId;
     }
