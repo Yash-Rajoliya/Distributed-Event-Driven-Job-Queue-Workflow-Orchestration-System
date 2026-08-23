@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: job-producer
+  namespace: djqueue
+spec:
+  selector:
+    app: job-producer
+  ports:
+    - port: 80
+      targetPort: 8081
+  type: ClusterIP
