@@ -5,19 +5,23 @@ metadata:
   namespace: djqueue
 spec:
   replicas: 2
-
   selector:
     matchLabels:
       app: retry-orchestrator
-
   template:
     metadata:
       labels:
         app: retry-orchestrator
-
     spec:
       containers:
         - name: retry
           image: YOUR_DOCKER_USER/retry-orchestrator:latest
           ports:
             - containerPort: 8083
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "500m"
+              memory: "1Gi"
