@@ -2,11 +2,9 @@ package com.djqueue.orchestrator.saga;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.core.OrderComparator;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 @Slf4j
@@ -18,15 +16,20 @@ public class JobSagaOrchestrator {
     private final List<SagaStep> steps;
 
     public void startSaga(String jobId) {
-        // Ensure steps execute in strictly defined order
-        List<SagaStep> orderedSteps = new ArrayList<>(steps);
-        OrderComparator.sort(orderedSteps);
+        if (jobId == null || jobId.isBlank()) {
+            throw new IllegalArgumentException("Job ID cannot be null or empty");
+        }
+
+        if (steps == null || steps.isEmpty()) {
+            log.warn("No saga steps configured for job: {}", jobId);
+            return;
+        }
 
         List<SagaStep> completedSteps = new ArrayList<>();
 
         try {
-            for (SagaStep step : orderedSteps) {
-                log.info("Executing step {} for job: {}", step.getName(), jobId);
+            for (SagaStep step : steps) {
+                log.info("Executing step [{}] for job: {}", step.getName(), jobId);
                 step.execute(jobId);
                 completedSteps.add(step);
             }
@@ -34,10 +37,15 @@ public class JobSagaOrchestrator {
             log.info("Saga completed successfully for job: {}", jobId);
 
         } catch (Exception e) {
-            log.error("Saga failed at step for job: {}. Triggering reverse compensation...", jobId, e);
-            // Reverse step order so compensation executes in LIFO order
-            Collections.reverse(completedSteps);
-            compensationHandler.compensate(completedSteps, jobId);
+            log.error("Saga execution failed for job: {}. Triggering compensation steps...", jobId, e);
+            
+            try {
+                compensationHandler.compensate(completedSteps, jobId);
+            } catch (Exception compEx) {
+                log.error("Compensation failed for job: {}. Critical recovery intervention required.", jobId, compEx);
+            }
+
+            throw new RuntimeException("Saga failed for job: " + jobId, e);
         }
     }
 }
