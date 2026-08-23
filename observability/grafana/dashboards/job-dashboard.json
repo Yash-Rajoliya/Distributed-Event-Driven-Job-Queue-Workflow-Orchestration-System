@@ -1,0 +1,32 @@
+{
+  "title": "Job Queue Dashboard",
+  "panels": [
+    {
+      "type": "graph",
+      "title": "Job Throughput",
+      "targets": [
+        {
+          "expr": "rate(job_processed_total[1m])"
+        }
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Retry Rate",
+      "targets": [
+        {
+          "expr": "rate(job_retry_total[1m])"
+        }
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Failure Rate",
+      "targets": [
+        {
+          "expr": "rate(job_failed_total[1m])"
+        }
+      ]
+    }
+  ]
+}
