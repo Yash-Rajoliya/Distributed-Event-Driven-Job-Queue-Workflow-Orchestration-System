@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: job-producer
+  namespace: djqueue
+spec:
+  replicas: 2
+
+  selector:
+    matchLabels:
+      app: job-producer
+
+  template:
+    metadata:
+      labels:
+        app: job-producer
+
+    spec:
+      containers:
+        - name: producer
+          image: YOUR_DOCKER_USER/job-producer:latest
+
+          ports:
+            - containerPort: 8081
+
+          envFrom:
+            - configMapRef:
+                name: app-config
+            - secretRef:
+                name: app-secrets

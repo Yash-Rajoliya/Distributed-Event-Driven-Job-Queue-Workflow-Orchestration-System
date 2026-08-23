@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dlq-processor
+  namespace: djqueue
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: dlq-processor
+
+  template:
+    metadata:
+      labels:
+        app: dlq-processor
+
+    spec:
+      containers:
+        - name: dlq
+          image: YOUR_DOCKER_USER/dlq-processor:latest
+          ports:
+            - containerPort: 8084
