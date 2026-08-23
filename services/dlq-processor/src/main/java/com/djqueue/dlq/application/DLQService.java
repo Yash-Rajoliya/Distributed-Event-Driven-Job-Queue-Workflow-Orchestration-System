@@ -4,22 +4,37 @@ import com.djqueue.common.dto.v1.JobEventV1;
 import com.djqueue.dlq.infrastructure.db.FailureLog;
 import com.djqueue.dlq.repository.FailureLogRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class DLQService {
 
     private final FailureLogRepository repository;
 
+    @Transactional
     public void handleFailure(JobEventV1 event) {
-        FailureLog log = FailureLog.builder()
-                .jobId(event.getJobId())
-                .payload(event.getPayload())
-                .retryCount(event.getRetryCount())
-                .failedAt(System.currentTimeMillis())
-                .build();
+        if (event == null) {
+            log.error("Received null JobEventV1 in DLQ service");
+            return;
+        }
 
-        repository.save(log);
+        try {
+            FailureLog failureLog = FailureLog.builder()
+                    .jobId(event.getJobId())
+                    .payload(event.getPayload())
+                    .retryCount(event.getRetryCount())
+                    .failedAt(System.currentTimeMillis())
+                    .build();
+
+            repository.save(failureLog);
+            log.info("Successfully persisted failure log for jobId: {}", event.getJobId());
+        } catch (Exception e) {
+            log.error("Failed to persist failure log for jobId: {}", event.getJobId(), e);
+            throw e; // Re-throw to trigger transaction rollback and allow Kafka offset retry/DLQ escalation
+        }
     }
 }
