@@ -22,6 +22,13 @@ public class DLQService {
             return;
         }
 
+        // Prevent infinite retry loops from flooding the DLQ table with duplicate logs
+        if (repository.existsByJobIdAndRetryCount(event.getJobId(), event.getRetryCount())) {
+            log.warn("Failure log already recorded for jobId: {} with retryCount: {}. Skipping duplicate.",
+                    event.getJobId(), event.getRetryCount());
+            return;
+        }
+
         try {
             FailureLog failureLog = FailureLog.builder()
                     .jobId(event.getJobId())
@@ -34,7 +41,7 @@ public class DLQService {
             log.info("Successfully persisted failure log for jobId: {}", event.getJobId());
         } catch (Exception e) {
             log.error("Failed to persist failure log for jobId: {}", event.getJobId(), e);
-            throw e; // Re-throw to trigger transaction rollback and allow Kafka offset retry/DLQ escalation
+            throw e;
         }
     }
 }
