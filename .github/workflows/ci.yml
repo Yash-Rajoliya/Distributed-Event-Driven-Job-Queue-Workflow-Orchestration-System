@@ -3,10 +3,17 @@ name: CI Pipeline
 on:
   push:
     branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -21,11 +28,14 @@ jobs:
 
       - name: Build project
         run: mvn clean install -DskipTests=false --batch-mode[cite: 12]
+        env:
+          MAVEN_OPTS: "-Dhttp.keepAlive=false -Dmaven.wagon.http.retryHandler.count=3"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Login to DockerHub
+        if: ${{ github.event_name != 'pull_request' && secrets.DOCKER_USER != '' }}
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USER }}[cite: 12]
@@ -36,8 +46,8 @@ jobs:
         with:
           context: .[cite: 12]
           file: infrastructure/docker/services/job-producer.Dockerfile[cite: 12]
-          push: true
-          tags: ${{ secrets.DOCKER_USER }}/job-producer:latest[cite: 12]
+          push: ${{ github.event_name != 'pull_request' && secrets.DOCKER_USER != '' }}
+          tags: ${{ secrets.DOCKER_USER || 'local' }}/job-producer:${{ github.sha }}[cite: 12]
           cache-from: type=gha,scope=job-producer
           cache-to: type=gha,mode=max,scope=job-producer
 
@@ -46,7 +56,7 @@ jobs:
         with:
           context: .[cite: 12]
           file: infrastructure/docker/services/worker-service.Dockerfile[cite: 12]
-          push: true
-          tags: ${{ secrets.DOCKER_USER }}/worker-service:latest[cite: 12]
+          push: ${{ github.event_name != 'pull_request' && secrets.DOCKER_USER != '' }}
+          tags: ${{ secrets.DOCKER_USER || 'local' }}/worker-service:${{ github.sha }}[cite: 12]
           cache-from: type=gha,scope=worker-service
           cache-to: type=gha,mode=max,scope=worker-service
