@@ -1,0 +1,1 @@
+INSERT INTO job_execution (job_id, status) VALUES ('test1', 'SUCCESS');
