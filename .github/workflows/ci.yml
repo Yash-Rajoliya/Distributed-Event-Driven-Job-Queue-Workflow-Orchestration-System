@@ -1,0 +1,36 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set up JDK
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Build project
+        run: mvn clean install -DskipTests=false
+
+      - name: Build Docker images
+        run: |
+          docker build -t ${{ secrets.DOCKER_USER }}/job-producer -f infrastructure/docker/services/job-producer.Dockerfile .
+          docker build -t ${{ secrets.DOCKER_USER }}/worker-service -f infrastructure/docker/services/worker-service.Dockerfile .
+
+      - name: Login to DockerHub
+        run: echo "${{ secrets.DOCKER_PASS }}" | docker login -u ${{ secrets.DOCKER_USER }} --password-stdin
+
+      - name: Push images
+        run: |
+          docker push ${{ secrets.DOCKER_USER }}/job-producer
+          docker push ${{ secrets.DOCKER_USER }}/worker-service
