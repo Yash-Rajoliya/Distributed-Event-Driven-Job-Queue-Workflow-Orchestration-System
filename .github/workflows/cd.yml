@@ -9,14 +9,34 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
       - name: Setup kubectl
         uses: azure/setup-kubectl@v3
 
       - name: Configure kubeconfig
-        run: echo "${{ secrets.KUBE_CONFIG }}" > kubeconfig.yaml
-
-      - name: Deploy to Kubernetes
         run: |
-          kubectl --kubeconfig=kubeconfig.yaml apply -f infrastructure/kubernetes/
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBE_CONFIG }}" > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Deploy Prerequisites (Namespace & Configs)
+        run: |
+          kubectl apply -f infrastructure/kubernetes/namespace.yaml --ignore-not-found=true
+          kubectl apply -f infrastructure/kubernetes/configmap.yaml --ignore-not-found=true
+          kubectl apply -f infrastructure/kubernetes/secrets.yaml --ignore-not-found=true
+
+      - name: Deploy Core Infrastructure & Services
+        run: |
+          kubectl apply -f infrastructure/kubernetes/producer-deployment.yaml
+          kubectl apply -f infrastructure/kubernetes/worker-deployment.yaml
+          kubectl apply -f infrastructure/kubernetes/services/
+
+      - name: Verify Rollout Status
+        run: |
+          kubectl rollout status deployment/job-producer -n djqueue --timeout=120s
+          kubectl rollout status deployment/worker-service -n djqueue --timeout=120s
